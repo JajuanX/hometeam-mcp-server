@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "hometeam": {
+      "command": "node",
+      "args": ["server.js"],
+      "cwd": "/Users/juanx/Desktop/hometeam-project-orange/hometeam/mcp-server",
+      "env": {
+        "MONGO_URI": "mongodb+srv://jajuanburton_db_user:gnCAfb2QE9zfF48f@hometeam-orange-v1.uqnu3qg.mongodb.net/?appName=hometeam-orange-v1",
+        "MCP_SERVER_NAME": "hometeam-directory",
+        "MCP_SERVER_VERSION": "1.0.0"
+      }
+    }
+  }
+}
