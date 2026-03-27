@@ -4,16 +4,21 @@
   "private": true,
   "type": "module",
   "description": "Hometeam MCP server for AI-queryable business directory access.",
+  "engines": {
+    "node": "20.x"
+  },
   "scripts": {
-    "start": "node server.js",
-    "start:http": "node httpServer.js",
-    "dev": "node --watch server.js",
-    "dev:http": "node --watch httpServer.js"
+    "start": "node httpServer.js",
+    "start:local": "node server.js",
+    "dev": "node --watch httpServer.js",
+    "dev:local": "node --watch server.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.15.0",
+    "cors": "^2.8.6",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
+    "express-rate-limit": "^8.3.1",
     "mongoose": "^9.3.2"
   }
 }

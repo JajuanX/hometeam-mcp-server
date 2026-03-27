@@ -49,7 +49,7 @@ cp .env.example .env
 ## Run (Stdio / Claude Desktop)
 
 ```bash
-npm run start
+npm run start:local
 ```
 
 Claude Desktop config sample is in `claude_desktop_config.json`.
@@ -61,7 +61,7 @@ Add the `hometeam` block from `claude_desktop_config.json` into your Claude Desk
 ## Run (HTTP/SSE)
 
 ```bash
-npm run start:http
+npm start
 ```
 
 Health check:
@@ -72,6 +72,49 @@ curl http://localhost:3001/health
 Endpoints:
 - `GET /sse`
 - `POST /messages?sessionId=<id>`
+
+## Deploy to Heroku (HTTP/SSE)
+
+```bash
+# Login and create app
+heroku login
+heroku create hometeam-mcp
+
+# Config vars
+heroku config:set NODE_ENV=production
+heroku config:set MONGO_URI="your_mongodb_atlas_uri"
+heroku config:set MCP_SERVER_NAME="hometeam-directory"
+heroku config:set MCP_SERVER_VERSION="1.0.0"
+heroku config:set CORS_ORIGIN="*"
+
+# Deploy
+git push heroku main
+
+# Logs
+heroku logs --tail --app hometeam-mcp
+```
+
+Heroku runs `httpServer.js` via `Procfile`. The stdio `server.js` is for local Claude Desktop only.
+
+After deploy:
+
+```bash
+curl https://hometeam-mcp.herokuapp.com/
+curl https://hometeam-mcp.herokuapp.com/health
+```
+
+Claude Desktop SSE config:
+
+```json
+{
+  "mcpServers": {
+    "hometeam": {
+      "type": "sse",
+      "url": "https://hometeam-mcp.herokuapp.com/sse"
+    }
+  }
+}
+```
 
 ## Free vs Paid tier (beta scaffold)
 
