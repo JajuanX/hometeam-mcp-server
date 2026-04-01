@@ -57,10 +57,12 @@ const buildRequestMeta = (defaultMeta, extra) => {
 };
 
 const createHometeamServer = (defaultMeta = {}) => {
+  const serverVersion = defaultMeta.version || process.env.MCP_SERVER_VERSION || '1.0.0';
+
   const server = new Server(
     {
       name: process.env.MCP_SERVER_NAME || 'hometeam-directory',
-      version: process.env.MCP_SERVER_VERSION || '1.0.0',
+      version: serverVersion,
     },
     {
       capabilities: {

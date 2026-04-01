@@ -2,6 +2,9 @@ import dotenv from 'dotenv';
 import express from 'express';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
+import { readFileSync } from 'fs';
+import { dirname, resolve } from 'path';
+import { fileURLToPath } from 'url';
 
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import connectDB from './config/db.js';
@@ -9,6 +12,8 @@ import createHometeamServer from './createServer.js';
 import apiKeyAuth from './middleware/apiKeyAuth.js';
 
 dotenv.config({ quiet: true });
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const pkg = JSON.parse(readFileSync(resolve(__dirname, 'package.json'), 'utf-8'));
 
 const app = express();
 
@@ -55,7 +60,7 @@ app.get('/', (_req, res) => {
   return res.status(200).json({
     service: 'hometeam-mcp-server',
     status: 'running',
-    version: process.env.MCP_SERVER_VERSION || '1.0.0',
+    version: pkg.version,
     transport: 'sse',
     endpoints: {
       health: '/health',
@@ -79,6 +84,7 @@ app.get('/health', (_req, res) => {
     success: true,
     status: 'ok',
     service: process.env.MCP_SERVER_NAME || 'hometeam-directory',
+    version: pkg.version,
   });
 });
 
@@ -89,6 +95,7 @@ app.get('/sse', apiKeyAuth, async (req, res) => {
       ip: req.ip,
       source: 'http',
       tier: req.mcpAccess?.tier || 'free',
+      version: pkg.version,
     });
 
     const transport = new SSEServerTransport('/messages', res);

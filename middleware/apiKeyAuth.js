@@ -12,7 +12,7 @@ const getAllowlistedKeys = () => {
 
 const getDailyLimit = (tier) => {
   if (tier === 'paid') {
-    return Number(process.env.MCP_PAID_DAILY_LIMIT || 10000);
+    return Number(process.env.MCP_PAID_DAILY_LIMIT || 30000);
   }
 
   return Number(process.env.MCP_FREE_DAILY_LIMIT || 100);
