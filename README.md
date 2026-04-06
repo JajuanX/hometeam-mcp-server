@@ -8,42 +8,31 @@ Built on the [Model Context Protocol](https://modelcontextprotocol.io) (MCP) —
 
 ---
 
-## Try it right now
+## Connect to the live server
 
-### Option 1: Remote connection (recommended)
+### Claude Desktop (remote SSE)
 
-If you have Claude Desktop, add the hosted server — no cloning, no setup:
-
-**1.** Open your Claude Desktop config file:
-- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
-- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
-
-**2.** Add the Hometeam server:
+Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_desktop_config.json`):
 
 ```json
 {
   "mcpServers": {
     "hometeam": {
-      "type": "sse",
-      "url": "https://hometeam-mcp.herokuapp.com/sse"
+      "transport": {
+        "type": "sse",
+        "url": "https://hometeam-mcp.herokuapp.com/sse"
+      }
     }
   }
 }
 ```
 
-**3.** Restart Claude Desktop.
+Restart Claude Desktop. Then ask:
+- "Find me a Black-owned restaurant in Lauderhill"
+- "What new businesses just joined Hometeam?"
+- "I need someone to do box braids near Miramar"
 
-**4.** Ask Claude:
-
-> "Find me a Black-owned restaurant in Lauderhill"
-
-> "I need someone to do box braids near Miramar"
-
-> "What new businesses just joined Hometeam?"
-
-Claude now has access to the full Hometeam directory.
-
-### Option 2: Local development
+### Local development
 
 If you want to run the server locally (for development or contributing):
 

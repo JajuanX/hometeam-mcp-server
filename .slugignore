@@ -1,7 +1,6 @@
-.env
-.env.example
-.gitignore
 server.js
 claude_desktop_config.json
+scripts/
 *.md
-.node-version
+.env
+.env.example

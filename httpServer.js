@@ -1,7 +1,7 @@
 import dotenv from 'dotenv';
 import express from 'express';
 import cors from 'cors';
-import rateLimit from 'express-rate-limit';
+import { randomUUID } from 'crypto';
 import { readFileSync } from 'fs';
 import { dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
@@ -9,64 +9,74 @@ import { fileURLToPath } from 'url';
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import connectDB from './config/db.js';
 import createHometeamServer from './createServer.js';
-import apiKeyAuth from './middleware/apiKeyAuth.js';
 
 dotenv.config({ quiet: true });
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(readFileSync(resolve(__dirname, 'package.json'), 'utf-8'));
+const PORT = Number(process.env.PORT || 3001);
+const PUBLIC_BASE_URL = process.env.MCP_PUBLIC_URL || 'https://hometeam-mcp.herokuapp.com';
+const DAILY_LIMIT = 100;
+const requestCounts = new Map();
 
 const app = express();
 
-if (process.env.NODE_ENV === 'production') {
-  app.set('trust proxy', 1);
-}
-
-const corsOrigins = process.env.CORS_ORIGIN
-  ? process.env.CORS_ORIGIN.split(',').map((origin) => origin.trim()).filter(Boolean)
-  : ['*'];
-
-const resolvedCorsOrigin = corsOrigins.length === 1 && corsOrigins[0] === '*'
-  ? '*'
-  : corsOrigins;
-
-const mcpLimiter = rateLimit({
-  windowMs: 24 * 60 * 60 * 1000,
-  max: (req) => (req.headers['x-api-key'] ? 10000 : 100),
-  keyGenerator: (req) => {
-    const headerKey = req.headers['x-api-key'];
-    if (typeof headerKey === 'string' && headerKey.trim().length > 0) {
-      return headerKey.trim();
-    }
-
-    return req.ip || 'unknown-ip';
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: {
-    error: 'Free tier limit reached (100 queries/day). Upgrade to Pro for higher limits.',
-    documentation: 'https://hometeam.app/developers',
-  },
-});
-
-app.use(cors({
-  origin: resolvedCorsOrigin,
-}));
+app.set('trust proxy', 1);
+app.use(cors());
 app.use(express.json({ limit: '1mb' }));
-app.use(mcpLimiter);
 
 const sessions = new Map();
+
+const getClientIp = (req) => {
+  const forwardedFor = req.headers['x-forwarded-for'];
+
+  if (typeof forwardedFor === 'string' && forwardedFor.trim().length > 0) {
+    return forwardedFor.split(',')[0].trim();
+  }
+
+  return req.ip || 'unknown-ip';
+};
+
+const getCurrentDay = () => new Date().toISOString().slice(0, 10);
+
+const rateLimiter = (req, res, next) => {
+  const apiKey = req.headers['x-api-key'];
+
+  if (typeof apiKey === 'string' && apiKey.trim().length > 0) {
+    // TODO: validate API key against database for paid tiers.
+    return next();
+  }
+
+  const ip = getClientIp(req);
+  const day = getCurrentDay();
+  const requestKey = `${ip}:${day}`;
+  const currentCount = requestCounts.get(requestKey) || 0;
+
+  if (currentCount >= DAILY_LIMIT) {
+    return res.status(429).json({
+      error: `Daily limit of ${DAILY_LIMIT} queries exceeded. Get an API key for higher limits at https://www.thehometeam.io/developers`,
+    });
+  }
+
+  requestCounts.set(requestKey, currentCount + 1);
+
+  if (Math.random() < 0.01) {
+    const today = getCurrentDay();
+    for (const key of requestCounts.keys()) {
+      if (!key.endsWith(today)) {
+        requestCounts.delete(key);
+      }
+    }
+  }
+
+  return next();
+};
 
 app.get('/', (_req, res) => {
   return res.status(200).json({
     service: 'hometeam-mcp-server',
     status: 'running',
     version: pkg.version,
-    transport: 'sse',
-    endpoints: {
-      health: '/health',
-      messages: '/messages',
-      sse: '/sse',
-    },
+    description: 'AI-queryable directory of Black-owned businesses in South Florida',
     tools: [
       'search_businesses',
       'get_business_details',
@@ -75,37 +85,49 @@ app.get('/', (_req, res) => {
       'list_neighborhoods',
       'get_latest_draft_class',
     ],
-    documentation: 'https://hometeam.app/developers',
+    documentation: 'https://www.thehometeam.io/developers',
+    connect: {
+      sse: `${PUBLIC_BASE_URL}/sse`,
+      messages: `${PUBLIC_BASE_URL}/messages`,
+    },
   });
 });
 
 app.get('/health', (_req, res) => {
   return res.status(200).json({
     success: true,
-    status: 'ok',
-    service: process.env.MCP_SERVER_NAME || 'hometeam-directory',
-    version: pkg.version,
+    data: {
+      status: 'ok',
+      version: pkg.version,
+      activeConnections: sessions.size,
+    },
   });
 });
 
-app.get('/sse', apiKeyAuth, async (req, res) => {
+app.get('/sse', rateLimiter, async (req, res) => {
+  const ip = getClientIp(req);
+  console.error(`New SSE connection from ${ip}`);
+
   try {
     const server = createHometeamServer({
-      apiKey: req.mcpAccess?.apiKey || null,
-      ip: req.ip,
+      apiKey: typeof req.headers['x-api-key'] === 'string' ? req.headers['x-api-key'] : null,
+      ip,
       source: 'http',
-      tier: req.mcpAccess?.tier || 'free',
+      tier: req.headers['x-api-key'] ? 'paid' : 'free',
       version: pkg.version,
     });
 
     const transport = new SSEServerTransport('/messages', res);
-    sessions.set(transport.sessionId, { server, transport });
+    const sessionId = transport.sessionId || randomUUID();
+    sessions.set(sessionId, { server, transport });
 
-    req.on('close', async () => {
-      const sessionEntry = sessions.get(transport.sessionId);
+    res.on('close', async () => {
+      const sessionEntry = sessions.get(sessionId);
       if (sessionEntry) {
+        console.error(`SSE connection closed: ${sessionId}`);
+        await sessionEntry.transport.close?.().catch(() => {});
         await sessionEntry.server.close?.();
-        sessions.delete(transport.sessionId);
+        sessions.delete(sessionId);
       }
     });
 
@@ -121,33 +143,24 @@ app.get('/sse', apiKeyAuth, async (req, res) => {
   return undefined;
 });
 
-app.post('/messages', apiKeyAuth, async (req, res) => {
-  const sessionId = req.query.sessionId;
+app.post('/messages', rateLimiter, async (req, res) => {
+  const sessionId = typeof req.query.sessionId === 'string' ? req.query.sessionId : null;
 
-  if (!sessionId || typeof sessionId !== 'string') {
+  if (!sessionId || !sessions.has(sessionId)) {
     return res.status(400).json({
-      success: false,
-      message: 'Missing sessionId query parameter.',
+      error: 'Invalid or expired session. Reconnect via /sse',
     });
   }
 
   const sessionEntry = sessions.get(sessionId);
 
-  if (!sessionEntry) {
-    return res.status(404).json({
-      success: false,
-      message: 'Unknown or expired MCP session.',
-    });
-  }
-
   try {
     await sessionEntry.transport.handlePostMessage(req, res, req.body);
     return undefined;
   } catch (error) {
-    console.error('Failed to handle MCP message:', error.message);
+    console.error('Message handling error:', error.message);
     return res.status(500).json({
-      success: false,
-      message: 'Failed to process MCP message.',
+      error: 'Internal server error',
     });
   }
 });
@@ -155,9 +168,10 @@ app.post('/messages', apiKeyAuth, async (req, res) => {
 const startHttpServer = async () => {
   await connectDB();
 
-  const port = Number(process.env.PORT || 3001);
-  app.listen(port, () => {
-    console.error(`Hometeam MCP HTTP server listening on port ${port}`);
+  app.listen(PORT, () => {
+    console.error(`Hometeam MCP server running on port ${PORT}`);
+    console.error('SSE endpoint: /sse');
+    console.error('Messages endpoint: /messages');
   });
 };
 
