@@ -10,7 +10,7 @@ Built on the [Model Context Protocol](https://modelcontextprotocol.io) (MCP) —
 
 ## Connect to the live server
 
-### Claude Desktop (remote SSE)
+### Claude Desktop
 
 Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_desktop_config.json`):
 
@@ -20,7 +20,7 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
     "hometeam": {
       "transport": {
         "type": "sse",
-        "url": "https://hometeam-mcp.herokuapp.com/sse"
+        "url": "https://mcp.thehometeam.io/sse"
       }
     }
   }
@@ -31,6 +31,32 @@ Restart Claude Desktop. Then ask:
 - "Find me a Black-owned restaurant in Lauderhill"
 - "What new businesses just joined Hometeam?"
 - "I need someone to do box braids near Miramar"
+
+### HTTP endpoints
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET https://mcp.thehometeam.io/` | Service info and available tools |
+| `GET https://mcp.thehometeam.io/health` | Health check |
+| `GET https://mcp.thehometeam.io/sse` | SSE connection for MCP clients |
+| `POST https://mcp.thehometeam.io/messages` | MCP message handler |
+
+### Rate limits
+
+| Tier | Limit | How to access |
+|------|-------|---------------|
+| Free | 100 queries/day | No API key required |
+| Pro | 10,000 queries/day | API key (coming soon — join the waitlist at thehometeam.io/developers) |
+
+### Quick test
+
+```bash
+# Service info
+curl https://mcp.thehometeam.io/
+
+# Health check
+curl https://mcp.thehometeam.io/health
+```
 
 ### Local development
 
@@ -341,8 +367,8 @@ heroku config:set CORS_ORIGIN="*"
 git push heroku main
 
 # Verify
-curl https://hometeam-mcp.herokuapp.com/
-curl https://hometeam-mcp.herokuapp.com/health
+curl https://mcp.thehometeam.io/
+curl https://mcp.thehometeam.io/health
 ```
 
 **Do not set PORT** — Heroku assigns it. The `Procfile` runs `node httpServer.js`.
@@ -350,7 +376,7 @@ curl https://hometeam-mcp.herokuapp.com/health
 ### Verify tools are registered
 
 ```bash
-curl https://hometeam-mcp.herokuapp.com/
+curl https://mcp.thehometeam.io/
 ```
 
 Response includes all 6 tool names in the `tools` array.

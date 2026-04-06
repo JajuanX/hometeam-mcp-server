@@ -14,7 +14,7 @@ dotenv.config({ quiet: true });
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(readFileSync(resolve(__dirname, 'package.json'), 'utf-8'));
 const PORT = Number(process.env.PORT || 3001);
-const PUBLIC_BASE_URL = process.env.MCP_PUBLIC_URL || 'https://hometeam-mcp.herokuapp.com';
+const PUBLIC_BASE_URL = process.env.MCP_PUBLIC_URL || 'https://mcp.thehometeam.io';
 const DAILY_LIMIT = 100;
 const requestCounts = new Map();
 

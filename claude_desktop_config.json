@@ -1,13 +1,16 @@
 {
   "mcpServers": {
-    "hometeam": {
+    "hometeam-remote": {
+      "transport": {
+        "type": "sse",
+        "url": "https://mcp.thehometeam.io/sse"
+      }
+    },
+    "hometeam-local": {
       "command": "node",
-      "args": ["server.js"],
-      "cwd": "/Users/juanx/Desktop/hometeam-project-orange/hometeam/mcp-server",
+      "args": ["/absolute/path/to/mcp-server/server.js"],
       "env": {
-        "MONGO_URI": "mongodb+srv://jajuanburton_db_user:gnCAfb2QE9zfF48f@hometeam-orange-v1.uqnu3qg.mongodb.net/?appName=hometeam-orange-v1",
-        "MCP_SERVER_NAME": "hometeam-directory",
-        "MCP_SERVER_VERSION": "1.0.0"
+        "MONGO_URI": "mongodb://localhost:27017/hometeam"
       }
     }
   }
