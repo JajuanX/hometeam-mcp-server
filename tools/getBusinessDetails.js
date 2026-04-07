@@ -51,19 +51,22 @@ const formatEventRow = (event) => ({
 export const getBusinessDetailsHandler = async (input = {}, requestMeta = {}) => {
   const startedAt = Date.now();
   const { slug, name } = input;
+  const normalizedSlug = typeof slug === 'string' ? slug.trim() : '';
+  const normalizedName = typeof name === 'string' ? name.trim() : '';
 
-  if (!slug && !name) {
+  if (!normalizedSlug && !normalizedName) {
     return {
       error: 'Either "slug" or "name" is required.',
+      message: 'Provide a business slug or business name, then try again.',
     };
   }
 
   const query = { status: 'active' };
 
-  if (slug) {
-    query.slug = slug;
-  } else if (name) {
-    query.name = new RegExp(escapeRegex(name.trim()), 'i');
+  if (normalizedSlug) {
+    query.slug = normalizedSlug;
+  } else if (normalizedName) {
+    query.name = new RegExp(escapeRegex(normalizedName), 'i');
   }
 
   const business = await Business.findOne(query)
@@ -74,6 +77,7 @@ export const getBusinessDetailsHandler = async (input = {}, requestMeta = {}) =>
   if (!business) {
     return {
       error: 'Business not found',
+      message: 'That business may not be on Hometeam yet. Try searching with search_businesses to see what\'s available.',
     };
   }
 

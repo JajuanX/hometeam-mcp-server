@@ -45,6 +45,16 @@ export const listNeighborhoodsHandler = async (input = {}, requestMeta = {}) => 
     responseTimeMs: Date.now() - startedAt,
   });
 
+  if (neighborhoods.length === 0) {
+    return {
+      neighborhoodsByCounty: [],
+      total: 0,
+      message: county
+        ? `No neighborhoods found for ${county} yet.`
+        : 'No neighborhoods are available yet. Please check back soon.',
+    };
+  }
+
   return {
     neighborhoodsByCounty: Object.entries(grouped).map(([countyName, countyNeighborhoods]) => ({
       county: countyName,

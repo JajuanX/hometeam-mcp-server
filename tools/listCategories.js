@@ -22,6 +22,14 @@ export const listCategoriesHandler = async (input = {}, requestMeta = {}) => {
     responseTimeMs: Date.now() - startedAt,
   });
 
+  if (categories.length === 0) {
+    return {
+      categories: [],
+      total: 0,
+      message: 'No categories are available yet. Please check back soon.',
+    };
+  }
+
   return {
     categories: categories.map((category) => ({
       name: category.name,

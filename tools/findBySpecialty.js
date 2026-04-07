@@ -80,20 +80,22 @@ const resolveLocationFilter = async (location) => {
 export const findBySpecialtyHandler = async (input = {}, requestMeta = {}) => {
   const startedAt = Date.now();
   const { need, location } = input;
+  const normalizedNeed = typeof need === 'string' ? need.trim() : '';
 
-  if (!need || !need.trim()) {
+  if (!normalizedNeed) {
     return {
       error: 'The "need" field is required.',
+      message: 'Describe what you need, like "box braids near Miramar" or "brunch in Broward".',
     };
   }
 
-  const matchedCategorySlugs = getMatchedCategorySlugs(need);
+  const matchedCategorySlugs = getMatchedCategorySlugs(normalizedNeed);
   const matchedCategories = matchedCategorySlugs.length > 0
     ? await Category.find({ slug: { $in: matchedCategorySlugs } }).select('_id slug name').lean()
     : [];
 
   const locationFilter = await resolveLocationFilter(location);
-  const regex = new RegExp(escapeRegex(need.trim()), 'i');
+  const regex = new RegExp(escapeRegex(normalizedNeed), 'i');
 
   const query = {
     status: 'active',
@@ -126,9 +128,9 @@ export const findBySpecialtyHandler = async (input = {}, requestMeta = {}) => {
       relevance.push(`Matched category: ${business.category?.name}`);
     }
 
-    if ((business.name || '').toLowerCase().includes(need.toLowerCase())) {
+    if ((business.name || '').toLowerCase().includes(normalizedNeed.toLowerCase())) {
       relevance.push('Matched by business name');
-    } else if ((business.description || '').toLowerCase().includes(need.toLowerCase())) {
+    } else if ((business.description || '').toLowerCase().includes(normalizedNeed.toLowerCase())) {
       relevance.push('Matched by business description');
     }
 
@@ -158,6 +160,9 @@ export const findBySpecialtyHandler = async (input = {}, requestMeta = {}) => {
 
   if (matches.length === 0) {
     return {
+      results: [],
+      total: 0,
+      query_summary: `No businesses matching "${normalizedNeed}" found yet. Hometeam is growing - new businesses join every month on Draft Day.`,
       matches: [],
       summary: 'No businesses found matching that need. Try a broader request or remove the location filter.',
       location: locationFilter.locationContext || null,
@@ -166,7 +171,7 @@ export const findBySpecialtyHandler = async (input = {}, requestMeta = {}) => {
 
   return {
     matches,
-    summary: `Found ${matches.length} matching businesses for "${need.trim()}".`,
+    summary: `Found ${matches.length} matching businesses for "${normalizedNeed}".`,
     inferredCategories: matchedCategories.map((category) => ({
       name: category.name,
       slug: category.slug,

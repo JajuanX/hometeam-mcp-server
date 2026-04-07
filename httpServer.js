@@ -107,6 +107,7 @@ app.get('/health', (_req, res) => {
 app.get('/sse', rateLimiter, async (req, res) => {
   const ip = getClientIp(req);
   console.error(`New SSE connection from ${ip}`);
+  let heartbeat = null;
 
   try {
     const server = createHometeamServer({
@@ -121,7 +122,24 @@ app.get('/sse', rateLimiter, async (req, res) => {
     const sessionId = transport.sessionId || randomUUID();
     sessions.set(sessionId, { server, transport });
 
+    // Keep the SSE stream active to avoid Heroku's 55-second idle timeout.
+    heartbeat = setInterval(() => {
+      try {
+        res.write(':heartbeat\n\n');
+      } catch (_error) {
+        if (heartbeat) {
+          clearInterval(heartbeat);
+          heartbeat = null;
+        }
+      }
+    }, 30000);
+
     res.on('close', async () => {
+      if (heartbeat) {
+        clearInterval(heartbeat);
+        heartbeat = null;
+      }
+
       const sessionEntry = sessions.get(sessionId);
       if (sessionEntry) {
         console.error(`SSE connection closed: ${sessionId}`);
@@ -133,6 +151,11 @@ app.get('/sse', rateLimiter, async (req, res) => {
 
     await server.connect(transport);
   } catch (error) {
+    if (heartbeat) {
+      clearInterval(heartbeat);
+      heartbeat = null;
+    }
+
     console.error('Failed to initialize MCP SSE transport:', error.message);
     return res.status(500).json({
       success: false,

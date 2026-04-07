@@ -29,7 +29,8 @@ export const getLatestDraftClassHandler = async (input = {}, requestMeta = {}) =
     });
 
     return {
-      message: 'No published Draft Class yet.',
+      message: 'No Draft Classes have been published yet. Hometeam is preparing for its first Draft Day - stay tuned!',
+      learnMore: 'https://www.thehometeam.io',
       draftClass: null,
       businesses: [],
     };

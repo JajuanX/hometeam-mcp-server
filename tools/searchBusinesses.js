@@ -18,6 +18,8 @@ const SORT_MAP = {
   most_visited: { 'stats.totalVisits': -1, featured: -1 },
 };
 
+const EMPTY_DIRECTORY_MESSAGE = 'No businesses found yet. Hometeam is a new platform - businesses are added monthly on Draft Day. Check back soon!';
+
 export const searchBusinessesSchema = {
   description: 'Search the Hometeam directory for Black-owned businesses in South Florida. Filter by category, neighborhood, county, or keyword search. Returns active, verified businesses only.',
   inputSchema: {
@@ -56,7 +58,7 @@ export const searchBusinessesSchema = {
 const buildEmptyResponse = (querySummary) => ({
   results: [],
   total: 0,
-  query_summary: querySummary || 'No businesses found matching that query. Try broadening your search.',
+  query_summary: querySummary || EMPTY_DIRECTORY_MESSAGE,
 });
 
 export const searchBusinessesHandler = async (input = {}, requestMeta = {}) => {
@@ -81,7 +83,7 @@ export const searchBusinessesHandler = async (input = {}, requestMeta = {}) => {
     const matchedCategory = await Category.findOne({ slug: category }).select('_id');
 
     if (!matchedCategory) {
-      return buildEmptyResponse(`No businesses found for category "${category}".`);
+      return buildEmptyResponse(`No businesses found for category "${category}". ${EMPTY_DIRECTORY_MESSAGE}`);
     }
 
     mongoQuery.category = matchedCategory._id;
@@ -91,7 +93,7 @@ export const searchBusinessesHandler = async (input = {}, requestMeta = {}) => {
     const matchedNeighborhood = await Neighborhood.findOne({ slug: neighborhood }).select('_id');
 
     if (!matchedNeighborhood) {
-      return buildEmptyResponse(`No businesses found in neighborhood "${neighborhood}".`);
+      return buildEmptyResponse(`No businesses found in neighborhood "${neighborhood}". ${EMPTY_DIRECTORY_MESSAGE}`);
     }
 
     mongoQuery.neighborhood = matchedNeighborhood._id;
@@ -102,13 +104,13 @@ export const searchBusinessesHandler = async (input = {}, requestMeta = {}) => {
     const neighborhoodIds = countyNeighborhoods.map((item) => item._id);
 
     if (neighborhoodIds.length === 0) {
-      return buildEmptyResponse(`No businesses found in ${county}.`);
+      return buildEmptyResponse(`No businesses found in ${county}. ${EMPTY_DIRECTORY_MESSAGE}`);
     }
 
     if (mongoQuery.neighborhood) {
       const selectedId = String(mongoQuery.neighborhood);
       if (!neighborhoodIds.some((item) => String(item) === selectedId)) {
-        return buildEmptyResponse(`No businesses found in ${county} for that neighborhood filter.`);
+        return buildEmptyResponse(`No businesses found in ${county} for that neighborhood filter. ${EMPTY_DIRECTORY_MESSAGE}`);
       }
     } else {
       mongoQuery.neighborhood = { $in: neighborhoodIds };
@@ -118,7 +120,7 @@ export const searchBusinessesHandler = async (input = {}, requestMeta = {}) => {
   const total = await Business.countDocuments(mongoQuery);
 
   if (total === 0) {
-    const emptyResult = buildEmptyResponse('No businesses found matching that query. Try broadening your search.');
+    const emptyResult = buildEmptyResponse(EMPTY_DIRECTORY_MESSAGE);
     logUsage({
       tool: 'search_businesses',
       input,
