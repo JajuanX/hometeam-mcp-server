@@ -8,6 +8,50 @@ Built on the [Model Context Protocol](https://modelcontextprotocol.io) (MCP) —
 
 ---
 
+## Published on the MCP Registry
+
+This server is listed on the [official MCP Registry](https://registry.modelcontextprotocol.io) as `io.github.JajuanX/hometeam-directory`.
+
+**Live endpoint:** `https://mcp.thehometeam.io/sse`
+
+### Connect with Claude Desktop
+
+Add to your `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "hometeam": {
+      "command": "npx",
+      "args": [
+        "mcp-remote@latest",
+        "https://mcp.thehometeam.io/sse"
+      ]
+    }
+  }
+}
+```
+
+### Available tools
+
+| Tool | Description |
+|------|-------------|
+| `search_businesses` | Search by keyword, category, neighborhood, or county |
+| `get_business_details` | Get full profile: hours, contact, reviews, specials |
+| `find_by_specialty` | Natural language search ("someone to do box braids near Miramar") |
+| `list_categories` | All 14 business categories |
+| `list_neighborhoods` | Neighborhoods across Miami-Dade, Broward, Palm Beach |
+| `get_latest_draft_class` | Newest businesses added on Draft Day |
+
+### Rate limits
+
+| Tier | Limit | Access |
+|------|-------|--------|
+| Free | 100 queries/day | No API key needed |
+| Pro | 10,000 queries/day | API key (coming soon) |
+
+---
+
 ## Connect to the live server
 
 ### Claude Desktop
@@ -18,10 +62,11 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
 {
   "mcpServers": {
     "hometeam": {
-      "transport": {
-        "type": "sse",
-        "url": "https://mcp.thehometeam.io/sse"
-      }
+      "command": "npx",
+      "args": [
+        "mcp-remote@latest",
+        "https://mcp.thehometeam.io/sse"
+      ]
     }
   }
 }
@@ -56,6 +101,12 @@ curl https://mcp.thehometeam.io/
 
 # Health check
 curl https://mcp.thehometeam.io/health
+```
+
+### Verify on the registry
+
+```bash
+curl "https://registry.modelcontextprotocol.io/v0/servers/io.github.JajuanX%2Fhometeam-directory/versions/latest"
 ```
 
 ### Local development
