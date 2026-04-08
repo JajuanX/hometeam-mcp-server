@@ -1,6 +1,6 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-07-09/server.schema.json",
-  "name": "io.github.jajuanx/hometeam-directory",
+  "name": "io.github.JajuanX/hometeam-directory",
   "description": "Search Black-owned businesses in South Florida by category, neighborhood, or need.",
   "repository": {
     "url": "https://github.com/jajuanx/hometeam-mcp-server",
