@@ -1,0 +1,16 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-07-09/server.schema.json",
+  "name": "io.github.jajuanx/hometeam-directory",
+  "description": "AI-queryable directory of Black-owned businesses in South Florida. Search by category, neighborhood, or natural language. Discover verified businesses, get details, hours, reviews, and recommendations.",
+  "repository": {
+    "url": "https://github.com/jajuanx/hometeam-mcp-server",
+    "source": "github"
+  },
+  "version": "1.2.0",
+  "remotes": [
+    {
+      "type": "sse",
+      "url": "https://mcp.thehometeam.io/sse"
+    }
+  ]
+}
