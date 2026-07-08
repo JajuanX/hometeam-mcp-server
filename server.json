@@ -9,8 +9,8 @@
   "version": "1.2.0",
   "remotes": [
     {
-      "type": "sse",
-      "url": "https://mcp.thehometeam.io/sse"
+      "type": "streamable-http",
+      "url": "https://mcp.thehometeam.io/mcp"
     }
   ]
 }

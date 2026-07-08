@@ -139,13 +139,6 @@ export const getBusinessDetailsHandler = async (input = {}, requestMeta = {}) =>
 
   const rating = ratingMap.get(String(business._id)) || { average: 0, count: 0 };
 
-  Business.updateOne(
-    { _id: business._id },
-    { $inc: { 'stats.totalViews': 1 } },
-  ).catch((error) => {
-    console.error('Failed to increment business views:', error.message);
-  });
-
   const currentSpecials = activeEvents.filter((event) => event.type === 'special').map(formatEventRow);
   const upcomingEvents = activeEvents.filter((event) => event.type === 'event').map(formatEventRow);
 

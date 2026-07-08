@@ -1,204 +1,135 @@
-import dotenv from 'dotenv';
 import express from 'express';
-import cors from 'cors';
-import { randomUUID } from 'crypto';
-import { readFileSync } from 'fs';
-import { dirname, resolve } from 'path';
-import { fileURLToPath } from 'url';
+import dotenv from 'dotenv';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 
-import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
+import createServer from './createServer.js';
 import connectDB from './config/db.js';
-import createHometeamServer from './createServer.js';
 
-dotenv.config({ quiet: true });
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const pkg = JSON.parse(readFileSync(resolve(__dirname, 'package.json'), 'utf-8'));
-const PORT = Number(process.env.PORT || 3001);
-const PUBLIC_BASE_URL = process.env.MCP_PUBLIC_URL || 'https://mcp.thehometeam.io';
-const DAILY_LIMIT = 100;
-const requestCounts = new Map();
+dotenv.config();
+
+const PORT = process.env.PORT || 3100;
+const MCP_PUBLIC_URL = process.env.MCP_PUBLIC_URL || `http://localhost:${PORT}`;
+
+await connectDB();
 
 const app = express();
 
 app.set('trust proxy', 1);
-app.use(cors());
-app.use(express.json({ limit: '1mb' }));
 
-const sessions = new Map();
+// ============================================================
+// 1. CORS - must come before everything else so preflight works
+// ============================================================
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, x-api-key, Authorization, MCP-Protocol-Version, Mcp-Session-Id');
+  res.header('Access-Control-Allow-Methods', 'POST, GET, OPTIONS, DELETE');
+  res.header('Access-Control-Expose-Headers', 'MCP-Protocol-Version, Mcp-Session-Id');
 
-const getClientIp = (req) => {
-  const forwardedFor = req.headers['x-forwarded-for'];
-
-  if (typeof forwardedFor === 'string' && forwardedFor.trim().length > 0) {
-    return forwardedFor.split(',')[0].trim();
-  }
-
-  return req.ip || 'unknown-ip';
-};
-
-const getCurrentDay = () => new Date().toISOString().slice(0, 10);
-
-const rateLimiter = (req, res, next) => {
-  const apiKey = req.headers['x-api-key'];
-
-  if (typeof apiKey === 'string' && apiKey.trim().length > 0) {
-    // TODO: validate API key against database for paid tiers.
-    return next();
-  }
-
-  const ip = getClientIp(req);
-  const day = getCurrentDay();
-  const requestKey = `${ip}:${day}`;
-  const currentCount = requestCounts.get(requestKey) || 0;
-
-  if (currentCount >= DAILY_LIMIT) {
-    return res.status(429).json({
-      error: `Daily limit of ${DAILY_LIMIT} queries exceeded. Get an API key for higher limits at https://www.thehometeam.io/developers`,
-    });
-  }
-
-  requestCounts.set(requestKey, currentCount + 1);
-
-  if (Math.random() < 0.01) {
-    const today = getCurrentDay();
-    for (const key of requestCounts.keys()) {
-      if (!key.endsWith(today)) {
-        requestCounts.delete(key);
-      }
-    }
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
   }
 
   return next();
-};
-
-app.get('/', (_req, res) => {
-  return res.status(200).json({
-    service: 'hometeam-mcp-server',
-    status: 'running',
-    version: pkg.version,
-    description: 'AI-queryable directory of Black-owned businesses in South Florida',
-    tools: [
-      'search_businesses',
-      'get_business_details',
-      'find_by_specialty',
-      'list_categories',
-      'list_neighborhoods',
-      'get_latest_draft_class',
-    ],
-    documentation: 'https://www.thehometeam.io/developers',
-    connect: {
-      sse: `${PUBLIC_BASE_URL}/sse`,
-      messages: `${PUBLIC_BASE_URL}/messages`,
-    },
-  });
 });
 
+// ============================================================
+// 2. MCP protocol version header on every response
+// ============================================================
+app.use((req, res, next) => {
+  res.set('MCP-Protocol-Version', '2025-06-18');
+  next();
+});
+
+// ============================================================
+// 3. OAuth discovery - return 404 to signal "no auth required"
+//    Must come BEFORE any auth middleware would run.
+// ============================================================
+app.get('/.well-known/oauth-authorization-server', (_req, res) => {
+  res.status(404).json({ error: 'This server does not require authentication.' });
+});
+
+app.get('/.well-known/openid-configuration', (_req, res) => {
+  res.status(404).json({ error: 'This server does not require authentication.' });
+});
+
+// ============================================================
+// 4. JSON body parsing (no auth in this cycle)
+// ============================================================
+app.use(express.json({ limit: '1mb' }));
+
+// ============================================================
+// 5. Health check - public, no auth
+// ============================================================
 app.get('/health', (_req, res) => {
-  return res.status(200).json({
-    success: true,
-    data: {
-      status: 'ok',
-      version: pkg.version,
-      activeConnections: sessions.size,
-    },
+  res.status(200).json({
+    status: 'ok',
+    server: process.env.MCP_SERVER_NAME || 'hometeam-directory',
+    version: process.env.MCP_SERVER_VERSION || '1.0.0',
+    publicUrl: MCP_PUBLIC_URL,
+    timestamp: new Date().toISOString(),
   });
 });
 
-app.get('/sse', rateLimiter, async (req, res) => {
-  const ip = getClientIp(req);
-  console.error(`New SSE connection from ${ip}`);
-  let heartbeat = null;
-
+// ============================================================
+// 6. MCP request handler - Streamable HTTP transport
+//    Mounted at both `/` and `/mcp` for maximum client compatibility.
+// ============================================================
+const handleMcp = async (req, res) => {
   try {
-    const server = createHometeamServer({
-      apiKey: typeof req.headers['x-api-key'] === 'string' ? req.headers['x-api-key'] : null,
-      ip,
-      source: 'http',
-      tier: req.headers['x-api-key'] ? 'paid' : 'free',
-      version: pkg.version,
+    const server = createServer();
+    const transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: undefined,
+      enableJsonResponse: true,
     });
-
-    const transport = new SSEServerTransport('/messages', res);
-    const sessionId = transport.sessionId || randomUUID();
-    sessions.set(sessionId, { server, transport });
-
-    // Keep the SSE stream active to avoid Heroku's 55-second idle timeout.
-    heartbeat = setInterval(() => {
-      try {
-        res.write(':heartbeat\n\n');
-      } catch (_error) {
-        if (heartbeat) {
-          clearInterval(heartbeat);
-          heartbeat = null;
-        }
-      }
-    }, 30000);
-
-    res.on('close', async () => {
-      if (heartbeat) {
-        clearInterval(heartbeat);
-        heartbeat = null;
-      }
-
-      const sessionEntry = sessions.get(sessionId);
-      if (sessionEntry) {
-        console.error(`SSE connection closed: ${sessionId}`);
-        await sessionEntry.transport.close?.().catch(() => {});
-        await sessionEntry.server.close?.();
-        sessions.delete(sessionId);
-      }
-    });
-
     await server.connect(transport);
+    await transport.handleRequest(req, res, req.body);
   } catch (error) {
-    if (heartbeat) {
-      clearInterval(heartbeat);
-      heartbeat = null;
+    console.error('[mcp] request error:', error);
+    if (!res.headersSent) {
+      res.status(500).json({
+        jsonrpc: '2.0',
+        error: { code: -32603, message: 'Internal error' },
+        id: null,
+      });
     }
-
-    console.error('Failed to initialize MCP SSE transport:', error.message);
-    return res.status(500).json({
-      success: false,
-      message: 'Unable to start MCP SSE session.',
-    });
   }
-
-  return undefined;
-});
-
-app.post('/messages', rateLimiter, async (req, res) => {
-  const sessionId = typeof req.query.sessionId === 'string' ? req.query.sessionId : null;
-
-  if (!sessionId || !sessions.has(sessionId)) {
-    return res.status(400).json({
-      error: 'Invalid or expired session. Reconnect via /sse',
-    });
-  }
-
-  const sessionEntry = sessions.get(sessionId);
-
-  try {
-    await sessionEntry.transport.handlePostMessage(req, res, req.body);
-    return undefined;
-  } catch (error) {
-    console.error('Message handling error:', error.message);
-    return res.status(500).json({
-      error: 'Internal server error',
-    });
-  }
-});
-
-const startHttpServer = async () => {
-  await connectDB();
-
-  app.listen(PORT, () => {
-    console.error(`Hometeam MCP server running on port ${PORT}`);
-    console.error('SSE endpoint: /sse');
-    console.error('Messages endpoint: /messages');
-  });
 };
 
-startHttpServer().catch((error) => {
-  console.error('Failed to start Hometeam MCP HTTP server:', error.message);
-  process.exit(1);
+app.post('/', handleMcp);
+app.post('/mcp', handleMcp);
+
+// ============================================================
+// 7. Protocol compliance handlers
+//    GET on MCP paths -> 405 (Method Not Allowed)
+//    DELETE on MCP paths -> 200 (session cleanup)
+// ============================================================
+app.get('/', (_req, res) => {
+  res.set('Allow', 'POST').status(405).json({
+    error: 'Method not allowed. Use POST for MCP requests.',
+    server: process.env.MCP_SERVER_NAME || 'hometeam-directory',
+    version: process.env.MCP_SERVER_VERSION || '1.0.0',
+  });
+});
+
+app.get('/mcp', (_req, res) => {
+  res.set('Allow', 'POST').status(405).json({
+    error: 'Method not allowed. Use POST for MCP requests.',
+  });
+});
+
+app.delete('/', (_req, res) => {
+  res.status(200).json({ ok: true });
+});
+
+app.delete('/mcp', (_req, res) => {
+  res.status(200).json({ ok: true });
+});
+
+// ============================================================
+// Start listening
+// ============================================================
+app.listen(PORT, () => {
+  console.log(`[mcp] server listening on port ${PORT}`);
+  console.log(`[mcp] public URL: ${MCP_PUBLIC_URL}`);
+  console.log('[mcp] transport: Streamable HTTP at /mcp and /');
 });
